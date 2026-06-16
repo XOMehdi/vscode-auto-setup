@@ -25,57 +25,48 @@ if (-not (Get-Command code -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# --- Spinner helper ---
-function Show-Spinner {
-    param(
-        [scriptblock]$Action,
-        [string]$Message = "Working..."
-    )
+# --- VS Code extensions to install ---
+$extensions = @(
+    @{ Name = "PDF Viewer"; Id = "tomoki1207.pdf" }
+    @{ Name = "Markdown Preview Enhanced"; Id = "shd101wyy.markdown-preview-enhanced" }
+    @{ Name = "Code Runner"; Id = "formulahendry.code-runner" }
+    @{ Name = "C/C++ Extension Pack"; Id = "ms-vscode.cpptools-extension-pack" }
+    @{ Name = "Python"; Id = "ms-python.python" }
+    @{ Name = "Jupyter"; Id = "ms-toolsai.jupyter" }
+    @{ Name = "Autopep8"; Id = "ms-python.autopep8" }
+    @{ Name = "Flutter"; Id = "dart-code.flutter" }
+    @{ Name = "PHP Intelephense"; Id = "bmewburn.vscode-intelephense-client" }
+)
 
-    $spinner = @('|', '/', '-', '\')
-    $job = Start-Job $Action
-    $i = 0
+# --- Track overall progress ---
+# Extensions + Load Settings + Apply Settings + Save Settings
+$totalTasks = $extensions.Count + 3
+$currentTask = 0
 
-    while ($job.State -eq 'Running') {
-        Write-Host -NoNewline ("`r" + $Message + " " + $spinner[$i])
-        Start-Sleep -Milliseconds 150
-        $i = ($i + 1) % $spinner.Length
-    }
+# --- Install extensions ---
+Write-Host "Installing VS Code extensions..."
+Write-Host ""
 
-    Receive-Job $job | Out-Null
-    Remove-Job $job
+$extensionNumber = 0
 
-    Write-Host "`r$Message ... Done!    `n"
+foreach ($ext in $extensions) {
+
+    $extensionNumber++
+    $currentTask++
+
+    $percent = [math]::Floor(($currentTask / $totalTasks) * 100)
+
+    Write-Progress `
+        -Activity "VS Code Auto Setup" `
+        -Status "Installing extension $extensionNumber/$($extensions.Count): $($ext.Name)" `
+        -PercentComplete $percent
+
+    Write-Host "[$extensionNumber/$($extensions.Count)] Installing $($ext.Name)..."
+
+    code --install-extension $ext.Id --force | Out-Null
 }
 
-# --- Install selected VS Code extensions ---
-Write-Host "Installing VS Code extensions..."
-
-Show-Spinner {
-
-    # Documentation & Productivity
-    code --install-extension tomoki1207.pdf | Out-Null
-    code --install-extension shd101wyy.markdown-preview-enhanced | Out-Null
-
-    # General Development
-    code --install-extension formulahendry.code-runner | Out-Null
-
-    # C/C++
-    code --install-extension ms-vscode.cpptools-extension-pack | Out-Null
-
-    # Python
-    code --install-extension ms-python.python | Out-Null
-    code --install-extension ms-toolsai.jupyter | Out-Null
-    code --install-extension ms-python.autopep8 | Out-Null
-
-    # Flutter / Dart
-    code --install-extension dart-code.flutter | Out-Null
-
-    # PHP
-    code --install-extension bmewburn.vscode-intelephense-client | Out-Null
-
-} "Installing extensions"
-
+Write-Host ""
 Write-Host "Extensions installed.`n"
 
 # --- Path to VS Code user settings.json ---
@@ -85,6 +76,14 @@ $settingsPath = "$env:APPDATA\Code\User\settings.json"
 if (!(Test-Path $settingsPath)) {
     '{}' | Out-File -Encoding UTF8 -FilePath $settingsPath
 }
+
+# --- Progress: Load settings ---
+$currentTask++
+
+Write-Progress `
+    -Activity "VS Code Auto Setup" `
+    -Status "Loading existing VS Code settings..." `
+    -PercentComplete ([math]::Floor(($currentTask / $totalTasks) * 100))
 
 # --- Load existing settings ---
 $settings = @{}
@@ -104,6 +103,14 @@ if ($content.Trim() -ne "") {
     }
 }
 
+# --- Progress: Apply settings ---
+$currentTask++
+
+Write-Progress `
+    -Activity "VS Code Auto Setup" `
+    -Status "Applying configuration settings..." `
+    -PercentComplete ([math]::Floor(($currentTask / $totalTasks) * 100))
+
 # --- Apply user configuration settings ---
 $settings["files.autoSave"] = "afterDelay"
 $settings["editor.formatOnSave"] = $true
@@ -116,10 +123,23 @@ $settings["code-runner.saveFileBeforeRun"] = $true
 # Terminal
 $settings["terminal.integrated.defaultProfile.windows"] = "Command Prompt"
 
+# --- Progress: Save settings ---
+$currentTask++
+
+Write-Progress `
+    -Activity "VS Code Auto Setup" `
+    -Status "Saving configuration..." `
+    -PercentComplete ([math]::Floor(($currentTask / $totalTasks) * 100))
+
 # --- Save updated settings ---
 $settings |
-ConvertTo-Json -Depth 10 |
-Out-File -Encoding UTF8 -FilePath $settingsPath
+    ConvertTo-Json -Depth 10 |
+    Out-File -Encoding UTF8 -FilePath $settingsPath
+
+# --- Finish progress display ---
+Write-Progress `
+    -Activity "VS Code Auto Setup" `
+    -Completed
 
 Write-Host "`nVS Code configuration completed successfully."
 Write-Host "Restart Visual Studio Code to apply all changes."
